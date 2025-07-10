@@ -3,29 +3,50 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const path = require('path');
 
 const app = express();
 
 // --- Middleware ---
-// We make CORS more open for Vercel
 app.use(cors()); 
 app.use(express.json());
 
 // --- MongoDB Connection ---
 const uri = process.env.ATLAS_URI;
-mongoose.connect(uri);
-
-const connection = mongoose.connection;
-connection.once('open', () => {
-  console.log("✅ MongoDB database connection established successfully");
-});
+if (uri) {
+  mongoose.connect(uri);
+  
+  const connection = mongoose.connection;
+  connection.once('open', () => {
+    console.log("✅ MongoDB database connection established successfully");
+  });
+  
+  connection.on('error', (err) => {
+    console.error('MongoDB connection error:', err);
+  });
+}
 
 // --- API Routes ---
 const projectsRouter = require('./routes/projects');
 const contactRouter = require('./routes/contact');
 
-app.use('/api/projects', projectsRouter); // Note: I've added /api here for consistency
+app.use('/api/projects', projectsRouter);
 app.use('/api/contact', contactRouter);
+
+// --- Health Check Route ---
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    mongodb: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
+  });
+});
+
+// --- Error Handler ---
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Something went wrong!' });
+});
 
 // --- IMPORTANT: EXPORT THE APP FOR VERCEL ---
 module.exports = app;
